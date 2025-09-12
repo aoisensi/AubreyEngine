@@ -1,3 +1,5 @@
+#![allow(private_interfaces, non_snake_case)]
+
 use std::any::TypeId;
 
 use crate::ecs::entity::Entity;

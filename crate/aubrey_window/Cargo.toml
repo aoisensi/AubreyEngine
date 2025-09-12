@@ -5,5 +5,4 @@ edition = "2021"
 
 [dependencies]
 aubrey_core = { path = "../aubrey_core" }
-winit = "0.28"
-
+winit = "0.30"

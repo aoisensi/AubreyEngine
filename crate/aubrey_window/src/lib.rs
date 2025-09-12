@@ -1,5 +1,5 @@
-use aubrey_core::app::{App, Stage, AppExit};
-use aubrey_core::ecs::{Entity};
+use aubrey_core::app::{App, AppExit};
+use aubrey_core::ecs::Entity;
 
 // Public components
 #[derive(Clone)]
@@ -18,146 +18,144 @@ impl WindowDescriptor {
 // Marker component indicating a native window was created for this entity
 pub struct WindowCreated;
 
-// Example "data to display" component. For今はウィンドウのタイトルに反映する。
+// Window title text
 #[derive(Clone, Default)]
 pub struct WindowText(pub String);
 
-// 公開リソース: 現在開いているウィンドウ数
-pub struct WindowStats {
-    pub open: usize,
-}
+// Window stats resource
+pub struct WindowStats { pub open: usize }
 
-// ---- Internal state (not in ECS resources to avoid Send/Sync bounds) ----
+// ---- Internal state ----
 use std::cell::RefCell;
 use std::collections::HashMap;
 
 use winit::dpi::LogicalSize;
-use winit::event::{Event, WindowEvent};
-use winit::event_loop::EventLoop;
-use winit::event_loop::ControlFlow;
-use winit::platform::run_return::EventLoopExtRunReturn;
-use winit::window::{Window, WindowBuilder, WindowId};
+use winit::application::ApplicationHandler;
+use winit::event::WindowEvent;
+use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
+use winit::window::{Window, WindowAttributes, WindowId};
 
-struct WinState {
-    event_loop: Option<EventLoop<()>>, // kept as Option to enable run_return each frame
-    // entity <-> window mapping
-    windows_by_entity: HashMap<Entity, Window>,
-    entities_by_id: HashMap<WindowId, Entity>,
-}
-
-impl WinState {
-    fn new() -> Self { Self { event_loop: Some(EventLoop::new()), windows_by_entity: HashMap::new(), entities_by_id: HashMap::new() } }
-}
-
+// Global window maps for cross-crate access
 thread_local! {
-    static WIN_STATE: RefCell<WinState> = RefCell::new(WinState::new());
+    static WIN_MAP: RefCell<(HashMap<Entity, Window>, HashMap<WindowId, Entity>)> = RefCell::new((HashMap::new(), HashMap::new()));
 }
 
-fn with_state<R>(f: impl FnOnce(&mut WinState) -> R) -> R {
-    WIN_STATE.with(|cell| {
+fn with_maps<R>(f: impl FnOnce(&mut HashMap<Entity, Window>, &mut HashMap<WindowId, Entity>) -> R) -> R {
+    WIN_MAP.with(|cell| {
         let mut borrow = cell.borrow_mut();
-        f(&mut *borrow)
+        // avoid two simultaneous &mut borrows to fields by splitting
+        let (map_ptr, rev_ptr): (*mut HashMap<Entity, Window>, *mut HashMap<WindowId, Entity>) = (&mut borrow.0, &mut borrow.1);
+        unsafe { f(&mut *map_ptr, &mut *rev_ptr) }
     })
 }
 
-// ---- Systems ----
+// Pending create requests collected by ECS system; consumed in about_to_wait where we have ActiveEventLoop
+thread_local! { static PENDING_CREATES: RefCell<Vec<(Entity, WindowDescriptor)>> = RefCell::new(Vec::new()); }
 
-// Create native windows for entities that have a WindowDescriptor but no WindowCreated
-fn sys_create_windows(ecs: &mut aubrey_core::ecs::ecs::Ecs) {
-    // Collect target entities first to avoid borrow issues
+// Redraw handler registered by GUI crate; invoked on resize/redraw
+thread_local! { static REDRAW_HANDLER: RefCell<Option<fn(&mut App, Entity)>> = RefCell::new(None); }
+
+pub fn set_redraw_handler(f: Option<fn(&mut App, Entity)>) { REDRAW_HANDLER.with(|h| *h.borrow_mut() = f); }
+
+pub fn with_window<R>(entity: Entity, f: impl FnOnce(&Window) -> R) -> Option<R> {
+    WIN_MAP.with(|cell| cell.borrow().0.get(&entity).map(f))
+}
+
+pub fn window_size(entity: Entity) -> Option<(u32, u32)> {
+    WIN_MAP.with(|cell| cell.borrow().0.get(&entity).map(|w| { let s = w.inner_size(); (s.width, s.height) }))
+}
+
+pub mod access { pub use super::{with_window as with_window_public, window_size as window_size_public}; }
+
+// ---- Systems: only collect create requests ----
+fn sys_collect_new_windows(ecs: &mut aubrey_core::ecs::ecs::Ecs) {
     let mut targets: Vec<(Entity, WindowDescriptor)> = Vec::new();
-    ecs.for_each::<WindowDescriptor, _>(|e, desc| {
-        if !ecs.has::<WindowCreated>(e) { targets.push((e, desc.clone())); }
-    });
-
+    ecs.for_each::<WindowDescriptor, _>(|e, desc| { if !ecs.has::<WindowCreated>(e) { targets.push((e, desc.clone())); } });
     if targets.is_empty() { return; }
-
-    with_state(|st| {
-        for (e, desc) in targets {
-            // Skip if already created (double-check against state)
-            if st.windows_by_entity.contains_key(&e) { continue; }
-
-            let ev = st.event_loop.as_ref().expect("event_loop missing");
-            // Builder API on winit 0.28
-            let window = WindowBuilder::new()
-                .with_title(desc.title)
-                .with_inner_size(LogicalSize::new(desc.width as f64, desc.height as f64))
-                .build(ev)
-                .expect("failed to create window");
-
-            let id = window.id();
-            st.entities_by_id.insert(id, e);
-            st.windows_by_entity.insert(e, window);
-
-            // Mark entity as created
-            ecs.insert::<WindowCreated>(e, WindowCreated);
-        }
+    // Filter already created
+    let existing: Vec<Entity> = WIN_MAP.with(|cell| cell.borrow().0.keys().copied().collect());
+    PENDING_CREATES.with(|q| {
+        let mut q = q.borrow_mut();
+        for (e, d) in targets { if !existing.contains(&e) { q.push((e, d)); } }
     });
 }
 
-// Poll events and apply simple behavior: close requests despawn marker; update title from WindowText
-fn sys_poll_events(ecs: &mut aubrey_core::ecs::ecs::Ecs) {
-    with_state(|st| {
-        let mut to_close: Vec<Entity> = Vec::new();
+// ---- Application handler ----
+struct Handler { app: App }
 
-        // Drain one round of events
-        let mut ev = st.event_loop.take().expect("event_loop missing");
-        ev.run_return(|event, _target, control| {
-            *control = ControlFlow::Poll;
-            match event {
-                Event::WindowEvent { event, window_id } => {
-                    match event {
-                        WindowEvent::CloseRequested => {
-                            if let Some(&e) = st.entities_by_id.get(&window_id) { to_close.push(e); }
-                        }
-                        _ => {}
-                    }
-                }
-                Event::MainEventsCleared => {
-                    *control = ControlFlow::Exit;
-                }
-                _ => {}
+impl Handler {
+    fn create_pending(&mut self, event_loop: &ActiveEventLoop) {
+        let pending: Vec<(Entity, WindowDescriptor)> = PENDING_CREATES.with(|q| q.borrow_mut().drain(..).collect());
+        if pending.is_empty() { return; }
+        with_maps(|map, rev| {
+            for (e, d) in pending {
+                if map.contains_key(&e) { continue; }
+                let attrs = WindowAttributes::default()
+                    .with_title(d.title)
+                    .with_inner_size(LogicalSize::new(d.width as f64, d.height as f64));
+                let window = event_loop.create_window(attrs).expect("create window");
+                let id = window.id();
+                rev.insert(id, e);
+                map.insert(e, window);
+                self.app.insert_component(e, WindowCreated);
             }
         });
-        st.event_loop = Some(ev);
+    }
+}
 
-        // Update titles from WindowText
-        let mut title_updates: Vec<(Entity, String)> = Vec::new();
-        ecs.for_each::<WindowText, _>(|e, txt| { title_updates.push((e, txt.0.clone())); });
-        for (e, t) in title_updates {
-            if let Some(w) = st.windows_by_entity.get(&e) { w.set_title(&t); }
-        }
+impl ApplicationHandler for Handler {
+    fn resumed(&mut self, event_loop: &ActiveEventLoop) { self.create_pending(event_loop); }
 
-        // Handle close requests: drop native window and remove marker
-        for e in to_close {
-            if let Some(w) = st.windows_by_entity.remove(&e) {
-                st.entities_by_id.remove(&w.id());
+    fn window_event(&mut self, _event_loop: &ActiveEventLoop, window_id: WindowId, event: WindowEvent) {
+        match event {
+            WindowEvent::CloseRequested => {
+                with_maps(|map, rev| {
+                    if let Some(&entity) = rev.get(&window_id) {
+                        map.remove(&entity);
+                        rev.remove(&window_id);
+                    }
+                });
             }
-            // Remove marker so it can be recreated if needed
-            ecs.for_each_mut::<WindowCreated, _>(|ent, _marker| {
-                if ent == e { /* just to drive mutable borrow; removal via dyn API not present */ }
-            });
-            // Currently Ecs lacks a remove<T>(), so we leave the marker in place.
-            // If the entity is despawned elsewhere, state map cleanup keeps us safe.
+            WindowEvent::Resized(_) | WindowEvent::ScaleFactorChanged { .. } => {
+                if let Some(entity) = WIN_MAP.with(|cell| cell.borrow().1.get(&window_id).copied()) {
+                    if let Some(f) = REDRAW_HANDLER.with(|h| *h.borrow()) { f(&mut self.app, entity); }
+                }
+            }
+            _ => {}
         }
-    });
+    }
+
+    fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
+        // run one ECS frame so systems can enqueue creates, update state, etc.
+        self.app.update();
+        // create windows that were requested by systems
+        self.create_pending(event_loop);
+        // update titles and request redraws
+        WIN_MAP.with(|cell| {
+            let maps = cell.borrow();
+            for (e, w) in maps.0.iter() {
+                if let Some(txt) = self.app.get_component::<WindowText>(*e) { w.set_title(&txt.0); }
+                w.request_redraw();
+            }
+        });
+        // publish stats and exit when no windows
+        let open = WIN_MAP.with(|cell| cell.borrow().0.len());
+        self.app.insert_resource(WindowStats { open });
+        if open == 0 { self.app.insert_resource(AppExit); event_loop.exit(); }
+        event_loop.set_control_flow(ControlFlow::Poll);
+    }
+
+    fn exiting(&mut self, _event_loop: &ActiveEventLoop) {}
 }
 
-// Publish window stats as a Resource
-fn sys_publish_stats(ecs: &mut aubrey_core::ecs::ecs::Ecs) {
-    let open = with_state(|st| st.windows_by_entity.len());
-    ecs.insert_resource(WindowStats { open });
-    if open == 0 { ecs.insert_resource(AppExit); }
+// Register window systems that only collect requests
+pub fn register(app: &mut App) { app.add_systems(aubrey_core::ecs::Stage::Update, sys_collect_new_windows); }
+
+// Entry that owns the event loop and drives the app
+pub fn run(mut app: App) {
+    // ensure our collector runs
+    register(&mut app);
+    let event_loop = EventLoop::new().expect("event loop");
+    let mut handler = Handler { app };
+    event_loop.run_app(&mut handler).expect("run app");
 }
-
-// Public helper to register window systems
-pub fn register(app: &mut App) {
-    app
-        .add_systems(Stage::Startup, sys_create_windows)
-        .add_systems(Stage::Update, sys_create_windows)
-        .add_systems(Stage::Update, sys_poll_events)
-        .add_systems(Stage::Last, sys_publish_stats);
-}
-
-// (no extra public helpers for now)
-

@@ -1,11 +1,10 @@
 [package]
-name = "aubrey_editor"
+name = "aubrey_gui"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
 aubrey_core = { path = "../aubrey_core" }
+aubrey_common = { path = "../aubrey_common" }
 aubrey_window = { path = "../aubrey_window" }
 aubrey_render = { path = "../aubrey_render" }
-aubrey_gui = { path = "../aubrey_gui" }
-aubrey_common = { path = "../aubrey_common" }

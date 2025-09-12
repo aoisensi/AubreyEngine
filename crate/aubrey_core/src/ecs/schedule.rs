@@ -125,7 +125,7 @@ impl Schedules {
 
             let mut avail: Vec<usize> = indices.iter().copied().filter(|&i| indeg[i] == 0).collect();
             // 小さい order, 次に登録順(=index) の優先で選ぶ
-            let mut pick_next = |pool: &mut Vec<usize>, list: &Vec<ScheduledSystem>| -> Option<usize> {
+            let pick_next = |pool: &mut Vec<usize>, list: &Vec<ScheduledSystem>| -> Option<usize> {
                 if pool.is_empty() { return None; }
                 let mut best = 0;
                 for k in 1..pool.len() {

@@ -1,0 +1,14 @@
+[package]
+name = "aubrey_render"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+aubrey_core = { path = "../aubrey_core" }
+aubrey_common = { path = "../aubrey_common" }
+aubrey_window = { path = "../aubrey_window" }
+softbuffer = "0.4"
+# Placeholders for future GPU backend (keep pinned for now)
+vulkano = { version = "0.34", default-features = false, features = ["macros"] }
+vulkano-win = { version = "0.34", default-features = false }
+winit = "0.30"
