@@ -1,0 +1,9 @@
+[package]
+name = "aubrey_window"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+aubrey_core = { path = "../aubrey_core" }
+winit = "0.28"
+

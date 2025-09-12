@@ -1,0 +1,8 @@
+[workspace]
+members = [
+    "crate/aubrey_common",
+    "crate/aubrey_core",
+    "crate/aubrey_widget",
+    "crate/aubrey_window",
+    "crate/aubrey_editor",
+]

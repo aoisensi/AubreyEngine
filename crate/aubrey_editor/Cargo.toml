@@ -1,0 +1,8 @@
+[package]
+name = "aubrey_editor"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+aubrey_core = { path = "../aubrey_core" }
+aubrey_window = { path = "../aubrey_window" }
