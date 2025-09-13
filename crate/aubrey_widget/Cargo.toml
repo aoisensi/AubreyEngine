@@ -1,6 +1,0 @@
-[package]
-name = "aubrey_widget"
-version = "0.1.0"
-edition = "2024"
-
-[dependencies]

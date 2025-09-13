@@ -1,6 +1,6 @@
 use aubrey_core::app::App;
 use aubrey_window::{WindowDescriptor, WindowText};
-use aubrey_gui::{RootWidget, PlaceholderWidget};
+use aubrey_gui::{RootWidget, PlaceholderWidget, BoxWidget, BoxDirection};
 use aubrey_common::color::Rgba;
 use aubrey_core::ecs::Children;
 
@@ -12,10 +12,21 @@ fn main() {
     let e = app.spawn_one(WindowDescriptor::new("Aubrey Editor", 640, 400));
     app.insert_component(e, WindowText("Aubrey Editor".into()));
 
-    // GUI root and placeholder widget as children of window
+    // GUI root and 2x2 grid using nested BoxWidget (Vertical -> two Horizontal rows)
     let root = app.spawn_one(RootWidget);
-    let placeholder = app.spawn_one(PlaceholderWidget { color: Rgba { r: 1.0, g: 0.0, b: 1.0, a: 1.0 } });
-    app.insert_component(e, Children(vec![root, placeholder]));
+    let top_box = app.spawn_one(BoxWidget { dir: BoxDirection::Vertical });
+    let row_top = app.spawn_one(BoxWidget { dir: BoxDirection::Horizontal });
+    let row_bottom = app.spawn_one(BoxWidget { dir: BoxDirection::Horizontal });
+    let ph1 = app.spawn_one(PlaceholderWidget { color: Rgba { r: 1.0, g: 0.0, b: 0.0, a: 1.0 } }); // red
+    let ph2 = app.spawn_one(PlaceholderWidget { color: Rgba { r: 0.0, g: 1.0, b: 0.0, a: 1.0 } }); // green
+    let ph3 = app.spawn_one(PlaceholderWidget { color: Rgba { r: 0.0, g: 0.0, b: 1.0, a: 1.0 } }); // blue
+    let ph4 = app.spawn_one(PlaceholderWidget { color: Rgba { r: 1.0, g: 1.0, b: 0.0, a: 1.0 } }); // yellow
+
+    app.insert_component(row_top, Children(vec![ph1, ph2]));
+    app.insert_component(row_bottom, Children(vec![ph3, ph4]));
+    app.insert_component(top_box, Children(vec![row_top, row_bottom]));
+    app.insert_component(root, Children(vec![top_box]));
+    app.insert_component(e, Children(vec![root]));
 
     // register gui rendering
     aubrey_gui::register(&mut app);

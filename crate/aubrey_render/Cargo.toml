@@ -12,3 +12,6 @@ softbuffer = "0.4"
 vulkano = { version = "0.34", default-features = false, features = ["macros"] }
 vulkano-win = { version = "0.34", default-features = false }
 winit = "0.30"
+wgpu = { version = "0.20", features = ["wgsl"] }
+pollster = "0.3"
+bytemuck = { version = "1.16", features = ["derive"] }
