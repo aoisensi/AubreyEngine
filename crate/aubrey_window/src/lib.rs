@@ -31,7 +31,7 @@ use std::collections::HashMap;
 
 use winit::dpi::LogicalSize;
 use winit::application::ApplicationHandler;
-use winit::event::WindowEvent;
+use winit::event::{WindowEvent, MouseButton, ElementState};
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::window::{Window, WindowAttributes, WindowId};
 
@@ -54,8 +54,12 @@ thread_local! { static PENDING_CREATES: RefCell<Vec<(Entity, WindowDescriptor)>>
 
 // Redraw handler registered by GUI crate; invoked on resize/redraw
 thread_local! { static REDRAW_HANDLER: RefCell<Option<fn(&mut App, Entity)>> = RefCell::new(None); }
+// Mouse click handler and last known cursor positions per window
+thread_local! { static CLICK_HANDLER: RefCell<Option<fn(&mut App, Entity, f32, f32)>> = RefCell::new(None); }
+thread_local! { static CURSOR_POS: RefCell<HashMap<WindowId, (f32, f32)>> = RefCell::new(HashMap::new()); }
 
 pub fn set_redraw_handler(f: Option<fn(&mut App, Entity)>) { REDRAW_HANDLER.with(|h| *h.borrow_mut() = f); }
+pub fn set_click_handler(f: Option<fn(&mut App, Entity, f32, f32)>) { CLICK_HANDLER.with(|h| *h.borrow_mut() = f); }
 
 pub fn with_window<R>(entity: Entity, f: impl FnOnce(&Window) -> R) -> Option<R> {
     WIN_MAP.with(|cell| cell.borrow().0.get(&entity).map(f))
@@ -118,6 +122,16 @@ impl ApplicationHandler for Handler {
             }
             WindowEvent::Resized(_) | WindowEvent::ScaleFactorChanged { .. } => {
                 if let Some(entity) = WIN_MAP.with(|cell| cell.borrow().1.get(&window_id).copied()) {
+                    if let Some(f) = REDRAW_HANDLER.with(|h| *h.borrow()) { f(&mut self.app, entity); }
+                }
+            }
+            WindowEvent::CursorMoved { position, .. } => {
+                CURSOR_POS.with(|m| { m.borrow_mut().insert(window_id, (position.x as f32, position.y as f32)); });
+            }
+            WindowEvent::MouseInput { state: ElementState::Released, button: MouseButton::Left, .. } => {
+                if let Some(entity) = WIN_MAP.with(|cell| cell.borrow().1.get(&window_id).copied()) {
+                    let (x, y) = CURSOR_POS.with(|m| m.borrow().get(&window_id).copied().unwrap_or((0.0, 0.0)));
+                    if let Some(f) = CLICK_HANDLER.with(|h| *h.borrow()) { f(&mut self.app, entity, x, y); }
                     if let Some(f) = REDRAW_HANDLER.with(|h| *h.borrow()) { f(&mut self.app, entity); }
                 }
             }
