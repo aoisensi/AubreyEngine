@@ -444,6 +444,9 @@ pub fn draw_rect_outline(buf: &mut [u32], width: usize, height: usize, stride: u
     draw_line(buf, width, height, stride, x1, y0, x1, y1, color);
 }
 
+// Embedded font accessors
+pub fn noto_sans_regular() -> &'static [u8] { include_bytes!("../assets/NotoSans-Regular.ttf") }
+
 pub fn draw_text_mono(buf: &mut [u32], width: usize, height: usize, stride: usize, x: i32, y: i32, text: &str, font_bytes: &[u8], px: f32, color: u32) {
     if let Ok(font) = FontRef::try_from_slice(font_bytes) {
         let scale = PxScale::from(px);

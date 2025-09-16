@@ -20,12 +20,11 @@ fn main() {
     // Ensure /editor/fonts exists
     let _ = vfs.mkdir("/editor");
     let _ = vfs.mkdir("/editor/fonts");
-    // Try to fetch NotoSans-Regular.ttf into /editor/fonts/
+    // Place embedded NotoSans-Regular.ttf into /editor/fonts/
     let font_path = "/editor/fonts/NotoSans-Regular.ttf";
     if !vfs.exists(font_path) {
-        if let Ok(resp) = reqwest::blocking::get("https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoSans/NotoSans-Regular.ttf") {
-            if let Ok(bytes) = resp.bytes() { let _ = vfs.write(font_path, &bytes); }
-        }
+        let bytes = aubrey_render::noto_sans_regular();
+        let _ = vfs.write(font_path, bytes);
     }
     app.insert_resource(vfs);
 

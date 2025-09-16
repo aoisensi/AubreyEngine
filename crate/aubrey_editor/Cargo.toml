@@ -9,4 +9,3 @@ aubrey_window = { path = "../aubrey_window" }
 aubrey_render = { path = "../aubrey_render" }
 aubrey_gui = { path = "../aubrey_gui" }
 aubrey_common = { path = "../aubrey_common" }
-reqwest = { version = "0.12", default-features = false, features = ["blocking", "rustls-tls"] }
