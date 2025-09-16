@@ -1,6 +1,6 @@
 use aubrey_core::app::App;
 use aubrey_window::{WindowDescriptor, WindowText};
-use aubrey_gui::{RootWidget, PlaceholderWidget, BoxWidget, BoxDirection};
+use aubrey_gui::{RootWidget, PlaceholderWidget, BoxWidget, Direction, MarginComponent, Size};
 use aubrey_common::color::Rgba;
 use aubrey_core::ecs::Children;
 
@@ -14,18 +14,45 @@ fn main() {
 
     // GUI root and 2x2 grid using nested BoxWidget (Vertical -> two Horizontal rows)
     let root = app.spawn_one(RootWidget);
-    let top_box = app.spawn_one(BoxWidget { dir: BoxDirection::Vertical });
-    let row_top = app.spawn_one(BoxWidget { dir: BoxDirection::Horizontal });
-    let row_bottom = app.spawn_one(BoxWidget { dir: BoxDirection::Horizontal });
+    let top_box = app.spawn_one(BoxWidget { dir: Direction::Down });
+
+    // rows
+    let row_top = app.spawn_one(BoxWidget { dir: Direction::Right });
+    let row_bottom = app.spawn_one(BoxWidget { dir: Direction::Right });
+
+    // placeholders
     let ph1 = app.spawn_one(PlaceholderWidget { color: Rgba { r: 1.0, g: 0.0, b: 0.0, a: 1.0 } }); // red
     let ph2 = app.spawn_one(PlaceholderWidget { color: Rgba { r: 0.0, g: 1.0, b: 0.0, a: 1.0 } }); // green
     let ph3 = app.spawn_one(PlaceholderWidget { color: Rgba { r: 0.0, g: 0.0, b: 1.0, a: 1.0 } }); // blue
     let ph4 = app.spawn_one(PlaceholderWidget { color: Rgba { r: 1.0, g: 1.0, b: 0.0, a: 1.0 } }); // yellow
 
-    app.insert_component(row_top, Children(vec![ph1, ph2]));
-    app.insert_component(row_bottom, Children(vec![ph3, ph4]));
-    app.insert_component(top_box, Children(vec![row_top, row_bottom]));
-    app.insert_component(root, Children(vec![top_box]));
+    // wrap each placeholder with a margin container to create spacing inside cells
+    let ph1_wrap = app.spawn_one(MarginComponent::all(Size::Px(8.0)));
+    let ph2_wrap = app.spawn_one(MarginComponent::all(Size::Px(8.0)));
+    let ph3_wrap = app.spawn_one(MarginComponent::all(Size::Px(8.0)));
+    let ph4_wrap = app.spawn_one(MarginComponent::all(Size::Px(8.0)));
+    app.insert_component(ph1_wrap, Children(vec![ph1]));
+    app.insert_component(ph2_wrap, Children(vec![ph2]));
+    app.insert_component(ph3_wrap, Children(vec![ph3]));
+    app.insert_component(ph4_wrap, Children(vec![ph4]));
+
+    // rows contain the wrapped placeholders
+    app.insert_component(row_top, Children(vec![ph1_wrap, ph2_wrap]));
+    app.insert_component(row_bottom, Children(vec![ph3_wrap, ph4_wrap]));
+
+    // wrap rows with vertical margins to create spacing between rows
+    let row_top_wrap = app.spawn_one(MarginComponent::vertical(Size::Px(8.0)));
+    let row_bottom_wrap = app.spawn_one(MarginComponent::vertical(Size::Px(8.0)));
+    app.insert_component(row_top_wrap, Children(vec![row_top]));
+    app.insert_component(row_bottom_wrap, Children(vec![row_bottom]));
+
+    // top_box contains wrapped rows
+    app.insert_component(top_box, Children(vec![row_top_wrap, row_bottom_wrap]));
+
+    // add an outer margin around everything under root
+    let root_margin = app.spawn_one(MarginComponent::all(Size::Px(16.0)));
+    app.insert_component(root_margin, Children(vec![top_box]));
+    app.insert_component(root, Children(vec![root_margin]));
     app.insert_component(e, Children(vec![root]));
 
     // register gui rendering

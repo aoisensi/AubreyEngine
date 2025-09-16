@@ -1,7 +1,8 @@
 use aubrey_core::ecs::ecs::Ecs;
 use aubrey_core::app::App;
 use aubrey_core::ecs::{Children, Entity};
-use crate::widgets::{PlaceholderWidget, BoxWidget, BoxDirection};
+use crate::widgets::{PlaceholderWidget, BoxWidget, MarginComponent};
+use aubrey_common::Direction;
 use aubrey_render::PlaceholderItem;
 use aubrey_common::color::Color;
 
@@ -13,22 +14,34 @@ pub fn compute_items_ecs(ecs: &Ecs, root: Entity, ww: u32, wh: u32) -> Vec<Place
         }
         let children = ecs.get::<Children>(e).map(|c| c.0.clone()).unwrap_or_default();
         if children.is_empty() { return; }
+        // apply margin to the area available to children
+        let (x, y, w, h) = if let Some(m) = ecs.get::<MarginComponent>(e) {
+            let ml = m.left.to_u32();
+            let mr = m.right.to_u32();
+            let mt = m.top.to_u32();
+            let mb = m.bottom.to_u32();
+            let nx = x.saturating_add(ml);
+            let ny = y.saturating_add(mt);
+            let nw = w.saturating_sub(ml.saturating_add(mr));
+            let nh = h.saturating_sub(mt.saturating_add(mb));
+            (nx, ny, nw, nh)
+        } else { (x, y, w, h) };
         if let Some(bx) = ecs.get::<BoxWidget>(e) {
             let n = children.len() as u32; if n == 0 { return; }
             match bx.dir {
-                BoxDirection::Horizontal => {
+                Direction::Right | Direction::Start => {
                     let cw = w / n; let mut cx = x; let cy = y;
                     for &ch in &children { layout_node(ecs, ch, cx, cy, cw, h, out); cx += cw; }
                 }
-                BoxDirection::HorizontalReverse => {
+                Direction::Left | Direction::End => {
                     let cw = w / n; let mut cx = x; let cy = y;
                     for &ch in children.iter().rev() { layout_node(ecs, ch, cx, cy, cw, h, out); cx += cw; }
                 }
-                BoxDirection::Vertical => {
+                Direction::Down => {
                     let chh = h / n; let mut cy = y; let cx = x;
                     for &ch in &children { layout_node(ecs, ch, cx, cy, w, chh, out); cy += chh; }
                 }
-                BoxDirection::VerticalReverse => {
+                Direction::Up => {
                     let chh = h / n; let mut cy = y; let cx = x;
                     for &ch in children.iter().rev() { layout_node(ecs, ch, cx, cy, w, chh, out); cy += chh; }
                 }
@@ -49,22 +62,34 @@ pub fn compute_items_app(app: &App, root: Entity, ww: u32, wh: u32) -> Vec<Place
         }
         let children = app.get_component::<Children>(e).map(|c| c.0.clone()).unwrap_or_default();
         if children.is_empty() { return; }
+        // apply margin to the area available to children
+        let (x, y, w, h) = if let Some(m) = app.get_component::<MarginComponent>(e) {
+            let ml = m.left.to_u32();
+            let mr = m.right.to_u32();
+            let mt = m.top.to_u32();
+            let mb = m.bottom.to_u32();
+            let nx = x.saturating_add(ml);
+            let ny = y.saturating_add(mt);
+            let nw = w.saturating_sub(ml.saturating_add(mr));
+            let nh = h.saturating_sub(mt.saturating_add(mb));
+            (nx, ny, nw, nh)
+        } else { (x, y, w, h) };
         if let Some(bx) = app.get_component::<BoxWidget>(e) {
             let n = children.len() as u32; if n == 0 { return; }
             match bx.dir {
-                BoxDirection::Horizontal => {
+                Direction::Right | Direction::Start => {
                     let cw = w / n; let mut cx = x; let cy = y;
                     for &ch in &children { layout_node(app, ch, cx, cy, cw, h, out); cx += cw; }
                 }
-                BoxDirection::HorizontalReverse => {
+                Direction::Left | Direction::End => {
                     let cw = w / n; let mut cx = x; let cy = y;
                     for &ch in children.iter().rev() { layout_node(app, ch, cx, cy, cw, h, out); cx += cw; }
                 }
-                BoxDirection::Vertical => {
+                Direction::Down => {
                     let chh = h / n; let mut cy = y; let cx = x;
                     for &ch in &children { layout_node(app, ch, cx, cy, w, chh, out); cy += chh; }
                 }
-                BoxDirection::VerticalReverse => {
+                Direction::Up => {
                     let chh = h / n; let mut cy = y; let cx = x;
                     for &ch in children.iter().rev() { layout_node(app, ch, cx, cy, w, chh, out); cy += chh; }
                 }

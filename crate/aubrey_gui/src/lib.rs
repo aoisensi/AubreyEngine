@@ -7,7 +7,8 @@ use aubrey_core::ecs::ecs::Ecs;
 pub mod widgets;
 pub mod layout;
 
-pub use widgets::{RootWidget, PlaceholderWidget, BoxWidget, BoxDirection};
+pub use widgets::{RootWidget, PlaceholderWidget, BoxWidget, MarginComponent, MouseActionComponent};
+pub use aubrey_common::{Direction, Size};
 
 fn render_one(ecs: &mut Ecs, w: Entity) {
     // find GUI root under the window
