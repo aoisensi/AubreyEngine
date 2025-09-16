@@ -125,6 +125,11 @@ impl ApplicationHandler for Handler {
                     if let Some(f) = REDRAW_HANDLER.with(|h| *h.borrow()) { f(&mut self.app, entity); }
                 }
             }
+            WindowEvent::RedrawRequested => {
+                if let Some(entity) = WIN_MAP.with(|cell| cell.borrow().1.get(&window_id).copied()) {
+                    if let Some(f) = REDRAW_HANDLER.with(|h| *h.borrow()) { f(&mut self.app, entity); }
+                }
+            }
             WindowEvent::CursorMoved { position, .. } => {
                 CURSOR_POS.with(|m| { m.borrow_mut().insert(window_id, (position.x as f32, position.y as f32)); });
             }
