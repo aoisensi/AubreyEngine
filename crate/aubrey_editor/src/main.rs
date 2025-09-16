@@ -1,8 +1,10 @@
 use aubrey_core::app::App;
 use aubrey_window::{WindowDescriptor, WindowText};
 use aubrey_gui::{RootWidget, PlaceholderWidget, BoxWidget, Direction, MarginComponent, Size};
+use aubrey_gui::widgets::TextLabel;
 use aubrey_common::color::Rgba;
 use aubrey_core::ecs::Children;
+use aubrey_core::fs::{Vfs, MemBackend};
 
 fn main() {
     let mut app = App::new();
@@ -11,6 +13,21 @@ fn main() {
 
     let e = app.spawn_one(WindowDescriptor::new("Aubrey Editor", 640, 400));
     app.insert_component(e, WindowText("Aubrey Editor".into()));
+
+    // Initialize VFS with in-memory root and mount at "/"
+    let mut vfs = Vfs::new();
+    vfs.mount("/", Box::new(MemBackend::new()));
+    // Ensure /editor/fonts exists
+    let _ = vfs.mkdir("/editor");
+    let _ = vfs.mkdir("/editor/fonts");
+    // Try to fetch NotoSans-Regular.ttf into /editor/fonts/
+    let font_path = "/editor/fonts/NotoSans-Regular.ttf";
+    if !vfs.exists(font_path) {
+        if let Ok(resp) = reqwest::blocking::get("https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoSans/NotoSans-Regular.ttf") {
+            if let Ok(bytes) = resp.bytes() { let _ = vfs.write(font_path, &bytes); }
+        }
+    }
+    app.insert_resource(vfs);
 
     // GUI root and 2x2 grid using nested BoxWidget (Vertical -> two Horizontal rows)
     let root = app.spawn_one(RootWidget);
@@ -48,6 +65,10 @@ fn main() {
 
     // top_box contains wrapped rows
     app.insert_component(top_box, Children(vec![row_top_wrap, row_bottom_wrap]));
+
+    // Add a TextLabel in top-left cell
+    let label = app.spawn_one(TextLabel { text: "Hello, Aubrey!".into(), color: Rgba { r: 0.9, g: 0.9, b: 0.9, a: 1.0 }, font_path: font_path.into(), size_px: 18.0 });
+    app.insert_component(ph1, Children(vec![label]));
 
     // add an outer margin around everything under root
     let root_margin = app.spawn_one(MarginComponent::all(Size::Px(16.0)));

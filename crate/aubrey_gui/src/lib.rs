@@ -1,6 +1,7 @@
 use aubrey_core::app::{App, Stage};
 use aubrey_core::ecs::{Children, Entity};
 use aubrey_render as render;
+use aubrey_core::fs::Vfs;
 use aubrey_window;
 use aubrey_core::ecs::ecs::Ecs;
 
@@ -70,8 +71,36 @@ pub fn register(app: &mut App) {
 
         let (ww, wh) = match aubrey_window::window_size(w) { Some((w, h)) => (w as u32, h as u32), None => return };
         let items = layout::compute_items_app(app, root, ww, wh);
-        if items.is_empty() { return; }
-        let _ = render::render_placeholders_wgpu(w, &items);
+        let vfs = app.resource::<Vfs>();
+        let _ = render::with_frame(w, |buf, width, height, stride| {
+            render::clear(buf, width, height, stride, render::pack_rgba_u8(0,0,0,255));
+            for it in &items {
+                let c = it.color;
+                let r = (c[0].clamp(0.0,1.0) * 255.0) as u8;
+                let g = (c[1].clamp(0.0,1.0) * 255.0) as u8;
+                let b = (c[2].clamp(0.0,1.0) * 255.0) as u8;
+                let a = (c[3].clamp(0.0,1.0) * 255.0) as u8;
+                let col = render::pack_rgba_u8(r,g,b,a);
+                render::draw_rect_outline(buf, width, height, stride, it.x as i32, it.y as i32, it.w as i32, it.h as i32, col);
+            }
+            // Draw TextLabel nodes
+            if let Some(vfs) = vfs {
+                let mut stack: Vec<(Entity, (u32,u32,u32,u32))> = layout::collect_hits_app(app, root, ww, wh);
+                for (e, (x,y,_w,_h)) in stack.drain(..) {
+                    if let Some(lbl) = app.get_component::<widgets::TextLabel>(e) {
+                        if let Some(bytes) = vfs.read(&lbl.font_path) {
+                            let color = render::pack_rgba_u8(
+                                (lbl.color.r.clamp(0.0,1.0) * 255.0) as u8,
+                                (lbl.color.g.clamp(0.0,1.0) * 255.0) as u8,
+                                (lbl.color.b.clamp(0.0,1.0) * 255.0) as u8,
+                                (lbl.color.a.clamp(0.0,1.0) * 255.0) as u8,
+                            );
+                            render::draw_text_mono(buf, width, height, stride, x as i32 + 4, y as i32 + 4, &lbl.text, &bytes, lbl.size_px, color);
+                        }
+                    }
+                }
+            }
+        });
     }
     fn on_click_app(app: &mut App, w: Entity, x: f32, y: f32) {
         // Find root under window

@@ -41,3 +41,10 @@ impl Default for MouseActionComponent {
         Self { on_click: None, on_down: None, on_up: None, on_enter: None, on_leave: None }
     }
 }
+
+pub struct TextLabel {
+    pub text: String,
+    pub color: Rgba,
+    pub font_path: String,
+    pub size_px: f32,
+}
