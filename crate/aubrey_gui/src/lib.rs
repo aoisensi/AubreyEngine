@@ -85,8 +85,8 @@ pub fn register(app: &mut App) {
             }
             // Draw TextLabel nodes
             if let Some(vfs) = vfs {
-                let mut stack: Vec<(Entity, (u32,u32,u32,u32))> = layout::collect_hits_app(app, root, ww, wh);
-                for (e, (x,y,_w,_h)) in stack.drain(..) {
+                let mut labels: Vec<(Entity, (u32,u32,u32,u32))> = layout::collect_textlabels_app(app, root, ww, wh);
+                for (e, (x,y,_w,_h)) in labels.drain(..) {
                     if let Some(lbl) = app.get_component::<widgets::TextLabel>(e) {
                         if let Some(bytes) = vfs.read(&lbl.font_path) {
                             let color = render::pack_rgba_u8(
