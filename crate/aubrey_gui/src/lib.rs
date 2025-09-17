@@ -49,15 +49,7 @@ fn render_one(ecs: &mut Ecs, w: Entity) {
     let _ = render::render_placeholders_wgpu(w, &items);
 }
 
-fn sys_gui_render(ecs: &mut Ecs) {
-    // collect windows
-    let mut windows: Vec<Entity> = Vec::new();
-    ecs.for_each::<aubrey_window::WindowCreated, _>(|e, _| windows.push(e));
-
-    for w in windows {
-        render_one(ecs, w);
-    }
-}
+fn sys_gui_render(_ecs: &mut Ecs) { /* disabled: rendering handled by redraw handler */ }
 
 pub fn register(app: &mut App) {
     // Immediate redraw handler during resize / redraw-request using App API
@@ -133,5 +125,6 @@ pub fn register(app: &mut App) {
 
     aubrey_window::set_redraw_handler(Some(render_one_app));
     aubrey_window::set_click_handler(Some(on_click_app));
-    app.add_systems(Stage::Last, sys_gui_render);
+    // Rendering is fully driven by the redraw handler now.
+    // app.add_systems(Stage::Last, sys_gui_render);
 }
