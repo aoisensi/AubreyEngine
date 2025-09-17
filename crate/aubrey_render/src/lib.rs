@@ -482,8 +482,9 @@ pub fn draw_text_mono(buf: &mut [u32], width: usize, height: usize, stride: usiz
                         }
                     }
                 });
-                let adv = font.h_advance_unscaled(id) * scale.x;
-                caret.x += adv;
+                let mut adv = (bb.max.x - bb.min.x).ceil();
+                if adv <= 0.0 { adv = px * 0.6; }
+                caret.x += adv + (px * 0.1);
             } else {
                 // Fallback advance
                 caret.x += px * 0.6;
