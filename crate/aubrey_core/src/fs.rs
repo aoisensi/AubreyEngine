@@ -82,8 +82,11 @@ impl Vfs {
     fn route_mut(&mut self, path: &str) -> Option<(&str, &mut Box<dyn Backend>, String)> {
         let p = norm(path);
         for (mp, be) in self.mounts.iter_mut() {
-            if p == *mp || p.starts_with(&(mp.clone() + "/")) {
-                let sub = if p == *mp { "/".to_string() } else { format!("/{}", &p[mp.len()+1..]) };
+            let is_match = if mp == "/" { true } else { p == *mp || p.starts_with(&(mp.clone() + "/")) };
+            if is_match {
+                let sub = if mp == "/" {
+                    if p == "/" { "/".to_string() } else { format!("/{}", &p[1..]) }
+                } else if p == *mp { "/".to_string() } else { format!("/{}", &p[mp.len()+1..]) };
                 return Some((mp.as_str(), be, sub));
             }
         }
@@ -92,8 +95,11 @@ impl Vfs {
     fn route(&self, path: &str) -> Option<(&str, &Box<dyn Backend>, String)> {
         let p = norm(path);
         for (mp, be) in &self.mounts {
-            if p == *mp || p.starts_with(&(mp.clone() + "/")) {
-                let sub = if p == *mp { "/".to_string() } else { format!("/{}", &p[mp.len()+1..]) };
+            let is_match = if mp == "/" { true } else { p == *mp || p.starts_with(&(mp.clone() + "/")) };
+            if is_match {
+                let sub = if mp == "/" {
+                    if p == "/" { "/".to_string() } else { format!("/{}", &p[1..]) }
+                } else if p == *mp { "/".to_string() } else { format!("/{}", &p[mp.len()+1..]) };
                 return Some((mp.as_str(), be, sub));
             }
         }
@@ -105,4 +111,3 @@ impl Vfs {
     pub fn list(&self, path: &str) -> Vec<String> { self.route(path).map(|(_, b, sub)| b.list(&sub)).unwrap_or_default() }
     pub fn mkdir(&mut self, path: &str) -> bool { self.route_mut(path).map(|(_, b, sub)| b.mkdir(&sub)).unwrap_or(false) }
 }
-
